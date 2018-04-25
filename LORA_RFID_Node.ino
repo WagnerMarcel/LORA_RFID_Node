@@ -15,7 +15,7 @@
 #include <MFRC522.h>
 
 #define RST_PIN         9           // Configurable, see typical pin layout above
-#define SS_PIN          10          // Configurable, see typical pin layout above
+#define SS_PIN          10          // Needs to be changed when RFM95 needs to be connected
 
 MFRC522 mfrc522(SS_PIN, RST_PIN);   // Create MFRC522 instance
 
@@ -23,7 +23,7 @@ void setup() {
   Serial.begin(9600);        // Initialize serial communications with the PC
   SPI.begin();               // Init SPI bus
   mfrc522.PCD_Init();        // Init MFRC522 card
-  Serial.println(F("Write personal data on a MIFARE PICC "));
+  Serial.println(F("READ BLOCK 1 INFO:"));
 }
 
 void loop() {
@@ -53,9 +53,9 @@ void loop() {
 
   //-------------------------------------------
 
-  //mfrc522.PICC_DumpDetailsToSerial(&(mfrc522.uid)); //dump some details about the card
+  mfrc522.PICC_DumpDetailsToSerial(&(mfrc522.uid)); //dump some details about the card
 
-  mfrc522.PICC_DumpToSerial(&(mfrc522.uid));      //uncomment this to see all blocks in hex
+  //mfrc522.PICC_DumpToSerial(&(mfrc522.uid));      //uncomment this to see all blocks in hex
 
   //-------------------------------------------
 
@@ -84,14 +84,11 @@ void loop() {
   //PRINT Block 1 Info
   for (uint8_t i = 0; i < 16; i++)
   {
-    if (buffer1[i] != 32)
-    {
-      Serial.write(buffer1[i]);
-    }
+    Serial.write(buffer1[i]);
   }
   Serial.print(" ");
   
-  Serial.println("End Reading!")
+  Serial.println("End Reading!");
 
   delay(1000); //change value if you want to read cards faster
 
