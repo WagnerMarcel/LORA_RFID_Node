@@ -1,12 +1,20 @@
  /*
+ * 
+ * Color Coding:
+ * MOSI:  YELLOW (Bus
+ * MISO:  GREEN (Bus)
+ * SCK:   ORANGE (Bus)
+ * RESET: BLUE (for each device)
+ * CS:    WHITE (for each device)
+ * 
  * Connection of RFID Reader:
  * -----------------------------------------------------------------------------------------
  *             MFRC522      Arduino       Arduino   Arduino    Arduino          Arduino
  *             Reader/PCD   Uno/101       Mega      Nano v3    Leonardo/Micro   Pro Micro
  * Signal      Pin          Pin           Pin       Pin        Pin              Pin
  * -----------------------------------------------------------------------------------------
- * RST/Reset   RST          9             5         D7         RESET/ICSP-5     RST
- * SPI SS      SDA(SS)      10            53        D2         10               10
+ * RST/Reset   RST          4             5         D7         RESET/ICSP-5     RST
+ * SPI SS      SDA(SS)      5             53        D6         10               10
  * SPI MOSI    MOSI         11 / ICSP-4   51        D11        ICSP-4           16
  * SPI MISO    MISO         12 / ICSP-1   50        D12        ICSP-1           14
  * SPI SCK     SCK          13 / ICSP-3   52        D13        ICSP-3           15
@@ -19,132 +27,112 @@
  *             Reader/PCD   Uno/101       Mega      Nano v3    Leonardo/Micro   Pro Micro
  * Signal      Pin          Pin           Pin       Pin        Pin              Pin
  * -----------------------------------------------------------------------------------------
- * Reset                                            D9
- * CS                                               D2
- * MOSI                                             D11
- * SCK                                              D13
- * A0/DC                                            D8
+ * Reset                    6                       D9
+ * CS                       7                       D4
+ * MOSI                     11                      D11
+ * SCK                      12                      D13
+ * A0/DC                    8                       D8
+ * -----------------------------------------------------------------------------------------
+ * 
+ *  * Connection of RFM95 LORA Module
+ * -----------------------------------------------------------------------------------------
+ *             MFRC522      Arduino       Arduino   Arduino    Arduino          Arduino
+ *             Reader/PCD   Uno/101       Mega      Nano v3    Leonardo/Micro   Pro Micro
+ * Signal      Pin          Pin           Pin       Pin        Pin              Pin
+ * -----------------------------------------------------------------------------------------
+ * D0                       D2
+ * D1                       D3
+ * Reset                    D9                      D9
+ * CS                       D10                     D4
+ * MOSI                     D11                     D11
+ * MISO                     D12                     
+ * SCK                      D13                     D13
  * -----------------------------------------------------------------------------------------
 */
 
+// General SPI Library
 #include <SPI.h>
+
+// LORA Libraries
+#include <lmic.h>
+#include <hal/hal.h>
+
+// RFID Reader Library
 #include <MFRC522.h>
-#include <Adafruit_ST7735.h> 
-#include <Adafruit_GFX.h>
 
-#define RST_PIN         7          // Configurable, see typical pin layout above
-#define SS_PIN          2          // Needs to be changed when RFM95 needs to be connected
+// TFT DIsplay Libraries
+//#include <Adafruit_ST7735.h> 
 
-#define TFT_CS          3          // TFT Chip Select
-#define TFT_RST         9          // Reset for all Devices
+// Config for RFID Reader
+#define RST_PIN         4          // Configurable, see typical pin layout above
+#define SS_PIN          5          // Needs to be changed when RFM95 needs to be connected
+
+// Config for TFT Display
+#define TFT_CS          7          // TFT Chip Select
+#define TFT_RST         6          // Reset for all Devices
 #define TFT_DC          8              
 
 MFRC522 mfrc522(SS_PIN, RST_PIN);   // Create MFRC522 instance
 
-Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS,  TFT_DC, TFT_RST); // Create TFT instance
+//Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS,  TFT_DC, TFT_RST); // Create TFT instance
 
+// LORA Config starts here:
+// Activation by personalisation is used, since it has less errors in this Library!
+// Define the Keys with MSB Format
+
+// LoRaWAN NwkSKey, network session key
+// This is the default Semtech key, which is used by the early prototype TTN
+// network.
+static const PROGMEM u1_t NWKSKEY[16] = { 0xDC, 0x79, 0x11, 0x60, 0xC5, 0xE1, 0x59, 0x9E, 0x2F, 0x08, 0x60, 0x7D, 0xEF, 0x1F, 0x18, 0xE7 };
+
+// LoRaWAN AppSKey, application session key
+// This is the default Semtech key, which is used by the early prototype TTN
+// network.
+static const u1_t PROGMEM APPSKEY[16] = { 0xAC, 0x02, 0x4C, 0x0D, 0x17, 0x1F, 0x26, 0x84, 0x53, 0x2F, 0xFD, 0x64, 0x73, 0xD1, 0xD6, 0xE5 };
+
+// LoRaWAN end-device address (DevAddr)
+static const u4_t DEVADDR = 0x2601197C ; // <-- Change this address for every node!
+
+uint8_t mydata[16];
+static osjob_t sendjob;
+
+// Schedule TX every this many seconds (might become longer due to duty
+// cycle limitations).
+const unsigned TX_INTERVAL = 10;
+
+// Pin mapping of the RFM95 Tranciever Chip
+const lmic_pinmap lmic_pins = {
+    .nss = 10,
+    .rxtx = LMIC_UNUSED_PIN,
+    .rst = 9,
+    .dio = {2,3, LMIC_UNUSED_PIN},
+};
+
+// Setup stuff
 void setup() {
-  Serial.begin(9600);        // Initialize serial communications with the PC
-  SPI.begin();               // Init SPI bus
-  mfrc522.PCD_Init();        // Init MFRC522 card
-  Serial.println(F("READ BLOCK 1 INFO:"));
+  Serial.begin(115200);        // Initialize serial communications with the PC
 
-  tft.initR(INITR_BLACKTAB);   // initialize a ST7735S chip, black tab
-  tft.fillScreen(ST7735_BLACK);
-  tft.setRotation(1);
-  draw("", true);
+  // LORA Setup First: 
+  LORAinit();
+
+  // Initialize the RFID Reader Card
+  mfrc522.PCD_Init();        // Init MFRC522 card
+
+  
+  // Initialize the TFT Display
+//  tft.initR(INITR_BLACKTAB);   // initialize a ST7735S chip, black tab
+//  tft.fillScreen(ST7735_BLACK);
+//  tft.setRotation(1);
+//  draw("", true);
 }
 
 void loop() {
-  // Prepare key - all keys are set to FFFFFFFFFFFFh at chip delivery from the factory.
-  MFRC522::MIFARE_Key key;
-  for (byte i = 0; i < 6; i++) key.keyByte[i] = 0xFF;
-
-  //some variables we need
-  byte block;
-  byte len;
-  MFRC522::StatusCode status;
-
-  //-------------------------------------------
-
-  // Look for new cards
-  if ( ! mfrc522.PICC_IsNewCardPresent()) {
-    return;
+  boolean scanned = scanCard();
+  if (scanned){
+    Serial.println("Sending...");
+    do_send(&sendjob);
+    os_runloop_once();
   }
-
-  // Select one of the cards
-  if ( ! mfrc522.PICC_ReadCardSerial()) {
-    return;
-  }
-
-  Serial.println(F("**Card Detected:**"));
-
-  //-------------------------------------------
-
-  mfrc522.PICC_DumpDetailsToSerial(&(mfrc522.uid)); //dump some details about the card
-
-  //mfrc522.PICC_DumpToSerial(&(mfrc522.uid));      //uncomment this to see all blocks in hex
-
-  //-------------------------------------------
-
-  Serial.print(F("Block 1 Info: "));
-
-  byte buffer1[16];
-  String buff = "";
-  block = 1;
-  len = 18;
-
-  //------------------------------------------- GET Block 1 Info
-  status = mfrc522.PCD_Authenticate(MFRC522::PICC_CMD_MF_AUTH_KEY_A, block, &key, &(mfrc522.uid)); //line 834 of MFRC522.cpp file
-  if (status != MFRC522::STATUS_OK) {
-    Serial.print(F("Authentication failed: "));
-    Serial.println(mfrc522.GetStatusCodeName(status));
-    return;
-  }
-
-  status = mfrc522.MIFARE_Read(block, buffer1, &len);
-  if (status != MFRC522::STATUS_OK) {
-    Serial.print(F("Reading failed: "));
-    Serial.println(mfrc522.GetStatusCodeName(status));
-    return;
-  }
-
-  //PRINT Block 1 Info
-  for (uint8_t i = 0; i < 16; i++)
-  {
-    Serial.write(buffer1[i]);
-    if(buffer1[i] != 32 && buffer1[i] != 0){
-      buff += char(buffer1[i]);
-    }
-  }
-  Serial.print(" ");
   
-  Serial.println("End Reading!");
-  
-  mfrc522.PICC_HaltA();
-  mfrc522.PCD_StopCrypto1();
-  draw(buff, false);
+  //draw(mydata, false);
 }
-
-
-void draw(String s, boolean access){
-  tft.fillScreen(ST7735_BLACK);
-  tft.setTextSize(2);
-  tft.setCursor(0, 0);
-  tft.println("Key Code:");
-  if(s.length() > 0){
-    tft.println(s);
-    tft.println(" ");
-    if(access){
-      tft.setTextColor(ST7735_GREEN);
-      tft.println("Access ok!");
-      tft.setTextColor(ST7735_WHITE);
-    }else if(! access){
-      tft.setTextColor(ST7735_RED);
-      tft.println("Access error!");
-      tft.setTextColor(ST7735_WHITE);
-    }
-  }
-  
-}
-
