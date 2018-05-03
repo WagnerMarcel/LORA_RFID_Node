@@ -49,11 +49,11 @@ boolean scanCard() {
   for (uint8_t i = 0; i < 16; i++)
   {
     Serial.write(buffer1[i]);
-    Serial.println(" ");
-    if(buffer1[i] != 32 && buffer1[i] != 0){
+    if(buffer1[i]!=0x00){
       mydata[i] = buffer1[i];
     }
   }
+  Serial.println(" ");
 
   mfrc522.PICC_HaltA();
   mfrc522.PCD_StopCrypto1();

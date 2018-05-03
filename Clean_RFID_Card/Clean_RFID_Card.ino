@@ -14,8 +14,8 @@
 #include <SPI.h>
 #include <MFRC522.h>
 
-#define RST_PIN         9           // Configurable, see typical pin layout above
-#define SS_PIN          2          // Configurable, see typical pin layout above
+#define RST_PIN         4           // Configurable, see typical pin layout above
+#define SS_PIN          5          // Configurable, see typical pin layout above
 
 MFRC522 mfrc522(SS_PIN, RST_PIN);   // Create MFRC522 instance
 
@@ -55,16 +55,16 @@ void loop() {
   byte block;
   MFRC522::StatusCode status;
   byte len;
-  buffer[0] = 0x30;  
-  buffer[1] = 0x31; 
-  buffer[2] = 0x32; 
-  buffer[3] = 0x33; 
-  buffer[4] = 0x34; 
-  buffer[5] = 0x35;
-  buffer[6] = 0x36; 
-  buffer[7] = 0x37; 
-  buffer[8] = 0x38; 
-  buffer[9] = 0x39;  
+  buffer[0] = 0x35;  
+  buffer[1] = 0x37; 
+  buffer[2] = 0x33; 
+  buffer[3] = 0x31; 
+  buffer[4] = 0x32; 
+  buffer[5] = 0x32;
+  buffer[6] = 0x32; 
+  buffer[7] = 0x32; 
+  buffer[8] = 0x32; 
+  buffer[9] = 0x32;  
   for(int i = 10; i < sizeof(buffer)/sizeof(byte); i++){
     buffer[i] = 0x00;
   }

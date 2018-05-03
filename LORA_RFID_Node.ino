@@ -21,19 +21,6 @@
  * -----------------------------------------------------------------------------------------
  * 
  * 
- * Connection of 1.8" TFT Display
- * -----------------------------------------------------------------------------------------
- *             MFRC522      Arduino       Arduino   Arduino    Arduino          Arduino
- *             Reader/PCD   Uno/101       Mega      Nano v3    Leonardo/Micro   Pro Micro
- * Signal      Pin          Pin           Pin       Pin        Pin              Pin
- * -----------------------------------------------------------------------------------------
- * Reset                    6                       D9
- * CS                       7                       D4
- * MOSI                     11                      D11
- * SCK                      12                      D13
- * A0/DC                    8                       D8
- * -----------------------------------------------------------------------------------------
- * 
  *  * Connection of RFM95 LORA Module
  * -----------------------------------------------------------------------------------------
  *             MFRC522      Arduino       Arduino   Arduino    Arduino          Arduino
@@ -60,45 +47,39 @@
 // RFID Reader Library
 #include <MFRC522.h>
 
-// TFT DIsplay Libraries
-//#include <Adafruit_ST7735.h> 
-
 // Config for RFID Reader
 #define RST_PIN         4          // Configurable, see typical pin layout above
-#define SS_PIN          5          // Needs to be changed when RFM95 needs to be connected
-
-// Config for TFT Display
-#define TFT_CS          7          // TFT Chip Select
-#define TFT_RST         6          // Reset for all Devices
-#define TFT_DC          8              
+#define SS_PIN          5          // Needs to be changed when RFM95 needs to be connected        
 
 MFRC522 mfrc522(SS_PIN, RST_PIN);   // Create MFRC522 instance
-
-//Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS,  TFT_DC, TFT_RST); // Create TFT instance
 
 // LORA Config starts here:
 // Activation by personalisation is used, since it has less errors in this Library!
 // Define the Keys with MSB Format
 
+// ABP
 // LoRaWAN NwkSKey, network session key
 // This is the default Semtech key, which is used by the early prototype TTN
 // network.
-static const PROGMEM u1_t NWKSKEY[16] = { 0xDC, 0x79, 0x11, 0x60, 0xC5, 0xE1, 0x59, 0x9E, 0x2F, 0x08, 0x60, 0x7D, 0xEF, 0x1F, 0x18, 0xE7 };
+static const PROGMEM u1_t NWKSKEY[16] = { 0x28, 0x0A, 0x63, 0xC6, 0x53, 0x14, 0xE6, 0xA1, 0x24, 0x8E, 0x0D, 0x61, 0x8D, 0x24, 0x72, 0xA9 };
 
 // LoRaWAN AppSKey, application session key
 // This is the default Semtech key, which is used by the early prototype TTN
 // network.
-static const u1_t PROGMEM APPSKEY[16] = { 0xAC, 0x02, 0x4C, 0x0D, 0x17, 0x1F, 0x26, 0x84, 0x53, 0x2F, 0xFD, 0x64, 0x73, 0xD1, 0xD6, 0xE5 };
+static const u1_t PROGMEM APPSKEY[16] = { 0x67, 0x1C, 0x11, 0x53, 0xAE, 0x00, 0xE7, 0x85, 0xCC, 0x12, 0xE4, 0x52, 0xFB, 0xF9, 0x09, 0x1A };
 
 // LoRaWAN end-device address (DevAddr)
-static const u4_t DEVADDR = 0x2601197C ; // <-- Change this address for every node!
+static const u4_t DEVADDR = 0x26011752 ; // <-- Change this address for every node!
 
-uint8_t mydata[16];
+uint8_t mydata[] = {0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20};
+uint8_t downlinkdata[6];
 static osjob_t sendjob;
+
+uint8_t okdata[] = {0x54, 0x72, 0x75, 0x65};
 
 // Schedule TX every this many seconds (might become longer due to duty
 // cycle limitations).
-const unsigned TX_INTERVAL = 10;
+const unsigned TX_INTERVAL = 60;
 
 // Pin mapping of the RFM95 Tranciever Chip
 const lmic_pinmap lmic_pins = {
@@ -108,31 +89,35 @@ const lmic_pinmap lmic_pins = {
     .dio = {2,3, LMIC_UNUSED_PIN},
 };
 
+boolean scanned;
+
 // Setup stuff
 void setup() {
   Serial.begin(115200);        // Initialize serial communications with the PC
-
-  // LORA Setup First: 
-  LORAinit();
+  SPI.begin();
 
   // Initialize the RFID Reader Card
   mfrc522.PCD_Init();        // Init MFRC522 card
-
-  
-  // Initialize the TFT Display
-//  tft.initR(INITR_BLACKTAB);   // initialize a ST7735S chip, black tab
-//  tft.fillScreen(ST7735_BLACK);
-//  tft.setRotation(1);
-//  draw("", true);
+    
 }
 
 void loop() {
-  boolean scanned = scanCard();
+  scanned = scanCard();
   if (scanned){
+    for(int i = 0; i < 16; i++){
+      Serial.print(mydata[i]);
+    }
+    digitalWrite(5, HIGH);
+    digitalWrite(4, LOW);
+    delay(100);
+    Serial.println("Initializing...");
+    // LORA Setup First: 
+    LORAinit();
     Serial.println("Sending...");
+    Serial.println(" ");
+    
     do_send(&sendjob);
-    os_runloop_once();
+    scanned = false;
   }
-  
-  //draw(mydata, false);
+  os_runloop_once();
 }
